@@ -15,7 +15,7 @@ const io = new Server(server, {
 });
 
 // Importante: Você deve copiar o seu array de WORDS para cá ou para um arquivo words.js
-const WORDS = [{word: "Óculos",category: "Objetos",related: ["Lente de Contato"],hint: "Melhora a percepção visual de quem usa.",}]
+const { WORDS } = require('./words'); 
 
 const rooms = new Map();
 

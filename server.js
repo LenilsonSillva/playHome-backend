@@ -151,11 +151,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('reroll-word', (roomCode) => {
-        const room = rooms.get(roomCode);
-        if (room && socket.id === room.hostId) {
-            handleSorteio(roomCode);
-        }
-    });
+    const room = rooms.get(roomCode);
+    // Verifica se a sala existe, se tem config e se é o Host
+    if (room && room.config && socket.id === room.hostId) {
+        console.log("Executando Reroll para a sala:", roomCode);
+        handleSorteio(roomCode); // Chama a mesma função de sorteio
+    }
+});
 
     socket.on('disconnect', () => {
         rooms.forEach((room, code) => {

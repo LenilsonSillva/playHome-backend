@@ -96,10 +96,12 @@ io.on('connection', (socket) => {
             }
 
             io.to(player.id).emit('game-started', {
-                isImpostor,
+               isImpostor,
                 word: playerWord,
                 hint: (isImpostor && impostorHasHint) ? wordData.hint : null,
-                allPlayers: room.players // Para saber quem está jogando
+                allPlayers: room.players,
+                phase: "reveal", // <--- ADICIONE ESTA LINHA AQUI
+                roomCode: roomCode // Útil para enviar votos depois
             });
         });
 

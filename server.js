@@ -10,7 +10,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ["https://play-home-iota.vercel.app/", "http://localhost:5173"], // Em produção, coloque a URL do seu site na Vercel
+        origin: "*", // Em produção, coloque a URL do seu site na Vercel
         methods: ["GET", "POST"]
     }
 });
@@ -159,5 +159,7 @@ function sendNewGameData(room) {
     });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+const PORT = process.env.PORT || 3001; // Render usa process.env.PORT
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+});

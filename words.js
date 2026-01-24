@@ -1,6 +1,6 @@
 // prettier-ignore
 
-export const WORDS = [
+const WORDS = [
  
   
   // === OBJETOS (Concretos / Simples / Compostos) ===

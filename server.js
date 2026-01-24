@@ -52,6 +52,7 @@ const handleSorteio = (roomCode) => {
     if (!room || !room.config) return;
 
     const { config, players, impostorHistory, usedWords } = room;
+    const drawId = Date.now().toString(); // ID único para este sorteio
 
     // 1. Quantidade de Impostores
     const count = getImpostorCount(players.length);
@@ -100,6 +101,7 @@ const handleSorteio = (roomCode) => {
             myColor: roundColors[index % roundColors.length],
             myEmoji: roundIcons[index % roundIcons.length],
             whoStart: starter.name,
+            drawId: drawId, // ENVIE ISSO
             roomCode: roomCode,
             isHost: player.id === room.hostId, // Importante para o botão Trocar aparecer
             phase: "reveal"
@@ -136,6 +138,11 @@ io.on('connection', (socket) => {
         socket.join(code);
         callback({ success: true });
         io.to(code).emit('room-updated', room.players);
+    });
+
+    socket.on('rejoin-room', (roomCode) => {
+        socket.join(roomCode);
+        console.log(`Socket ${socket.id} re-sincronizado na sala ${roomCode}`);
     });
 
     // Início oficial do jogo

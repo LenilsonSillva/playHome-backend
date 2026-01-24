@@ -1,5 +1,3 @@
-// prettier-ignore
-
 const WORDS = [
  
   
@@ -795,9 +793,5 @@ const WORDS = [
 
 ]
 
-const categories = Array.from(
-  new Set(WORDS.map((word) => word.category)),
-).sort();
 
 module.exports = { WORDS };
-module.exports = { categories };

@@ -1,5 +1,4 @@
-import { WORDS } from './words.js';
-
+const { WORDS } = require('./words');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');

@@ -795,6 +795,9 @@ export const WORDS = [
 
 ]
 
-export const categories = Array.from(
+const categories = Array.from(
   new Set(WORDS.map((word) => word.category)),
 ).sort();
+
+module.exports = { WORDS };
+module.exports = { categories };

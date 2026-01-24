@@ -1,4 +1,4 @@
-import { WORDS } from './words';
+import { WORDS } from './words.js';
 
 const express = require('express');
 const http = require('http');

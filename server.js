@@ -1,3 +1,5 @@
+import { WORDS } from './words';
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -15,10 +17,6 @@ const io = new Server(server, {
 });
 
 // Importante: Você deve copiar o seu array de WORDS para cá ou para um arquivo words.js
-const WORDS = [
-    { word: "Cachorro", category: "Animais", related: ["Gato"], hint: "Melhor amigo do homem" },
-    // ... adicione as outras palavras aqui
-];
 
 const rooms = new Map();
 

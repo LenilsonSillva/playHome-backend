@@ -9,7 +9,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "https://play-home-iota.vercel.app/", // Em produção, coloque a URL do seu site na Vercel
+        origin: ["https://play-home-iota.vercel.app/", "http://localhost:5173"], // Em produção, coloque a URL do seu site na Vercel
         methods: ["GET", "POST"]
     }
 });

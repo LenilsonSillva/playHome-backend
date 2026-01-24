@@ -128,7 +128,7 @@ io.on('connection', (socket) => {
 
             io.to(player.id).emit('game-started', {
                 isImpostor,
-                word: myWord,
+                word: isImpostor ? null : playerWord,
                 hint: (isImpostor && config.impostorHasHint) ? wordData.hint : null,
                 allPlayers: players, // Envia lista para sincronia
                 myColor: roundColors[index % roundColors.length],

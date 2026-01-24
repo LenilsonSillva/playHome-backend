@@ -106,6 +106,44 @@ io.on('connection', (socket) => {
         room.gameStarted = true;
     });
 
+    socket.on('reroll-word', (roomCode) => {
+    const room = rooms.get(roomCode);
+
+    // Validação: Sala existe e quem pediu é o Host?
+    if (!room || socket.id !== room.hostId) return;
+
+    console.log(`Host trocando a palavra da sala: ${roomCode}`);
+
+    // Reutilizamos a lógica de sorteio (vou criar uma função pra isso no seu server)
+    sendNewGameData(room); 
+});
+
+// Mova a lógica de sorteio para uma função separada para ser usada no start e no reroll
+function sendNewGameData(room) {
+    const { players, config } = room; // config deve ser salvo no objeto room no 'start-game'
+
+    // 1. Sorteio da Palavra (WORDS agora está aqui no backend)
+    const filteredWords = WORDS.filter(w => config.categories.includes(w.category));
+    const wordData = filteredWords[Math.floor(Math.random() * filteredWords.length)] || WORDS[0];
+
+    // 2. Sorteio de Impostores e Civil Relacionado
+    // ... (sua lógica de sorteio de IDs que já fizemos) ...
+
+    room.players.forEach(player => {
+        // ... cálculos de isImpostor, playerWord, etc ...
+
+        io.to(player.id).emit('game-started', {
+            isImpostor,
+            word: playerWord,
+            hint: (isImpostor && config.impostorHasHint) ? wordData.hint : null,
+            allPlayers: room.players,
+            phase: "reveal",
+            isHost: player.id === room.hostId, // Informa pro frontend se ele é o host
+            roomCode: room.code
+        });
+    });
+}
+
     // DESCONEXÃO
     socket.on('disconnect', () => {
         rooms.forEach((room, code) => {

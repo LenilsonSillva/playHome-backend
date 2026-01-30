@@ -7,7 +7,11 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "https://play-home-iota.vercel.app/",
+    origin: [
+      "https://play-home-iota.vercel.app", 
+      "http://localhost:5173",
+      "192.168.1.202:5173"
+    ],
     methods: ["GET", "POST"],
   },
 });
@@ -17,6 +21,9 @@ io.on("connection", (socket) => {
   registerSocket(io, socket);
 });
 
-server.listen(3000, () => {
-  console.log("🔥 Impostor server running on port 3000");
+
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`🔥 Impostor server running on port ${PORT}`);
 });

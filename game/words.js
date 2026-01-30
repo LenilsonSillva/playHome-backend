@@ -1,4 +1,4 @@
-const WORDS = [
+export const WORDS = [
  
   
   // === OBJETOS (Concretos / Simples / Compostos) ===
@@ -792,6 +792,3 @@ const WORDS = [
   {word: "Bacia",category: "Objetos",related: ["Balde"],hint: "Recipiente largo e raso usado para limpeza ou higiene pessoal.",},
 
 ]
-
-
-module.exports = { WORDS };

@@ -10,7 +10,6 @@ const io = new Server(server, {
     origin: [
       "https://play-home-iota.vercel.app", 
       "http://localhost:5173",
-      "192.168.1.202:5173"
     ],
     methods: ["GET", "POST"],
   },

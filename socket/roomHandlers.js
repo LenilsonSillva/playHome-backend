@@ -1,5 +1,5 @@
 import { rooms } from "../state/rooms.js";
-import { generateRoomCode } from "../game/impostor.utils.js";
+import { generateRoomCode, handlePlayerExit } from "../game/impostor.utils.js";
 
 function safeCb(cb, payload) {
   if (typeof cb === "function") cb(payload);
@@ -46,6 +46,25 @@ export function registerRoomHandlers(io, socket) {
         return cb({ error: "Esse nome já está sendo usado na sala" });
     }
 
+    if (room.phase !== "lobby") {
+      room.waitingPlayers ??= [];
+
+      room.waitingPlayers.push({
+        socketId: socket.id,
+        id,
+        name,
+        emoji,
+        color,
+      });
+
+      socket.join(roomCode);
+
+      return safeCb(cb, {
+        waiting: true,
+        message: "Aguardando próxima rodada",
+      });
+    }
+
     room.players.push({ socketId: socket.id, id, name: name.trim(), emoji, color });
     socket.join(roomCode);
 
@@ -54,22 +73,17 @@ export function registerRoomHandlers(io, socket) {
     safeCb(cb, { ok: true });
   });
 
-  socket.on("leave-room", ({ roomCode }, cb) => {
-    const room = rooms[roomCode];
-    if (!room) return safeCb(cb, { error: "Sala não existe" });
+socket.on("leave-room", ({ roomCode }, cb) => {
+  handlePlayerExit(io, socket, roomCode, "left");
+  safeCb(cb, { ok: true });
+});
 
-    room.players = room.players.filter((p) => p.socketId !== socket.id);
-
-    if (room.players.length === 0) {
-      delete rooms[roomCode];
-      return safeCb(cb, { ok: true });
+socket.on("disconnect", () => {
+  Object.entries(rooms).forEach(([roomCode, room]) => {
+    if (room.players.some(p => p.socketId === socket.id)) {
+      handlePlayerExit(io, socket, roomCode, "disconnect");
     }
-
-    if (room.hostId === socket.id) {
-      room.hostId = room.players[0].socketId;
-    }
-
-    io.to(roomCode).emit("room-updated", room);
-    safeCb(cb, { ok: true });
   });
+});
+
 }

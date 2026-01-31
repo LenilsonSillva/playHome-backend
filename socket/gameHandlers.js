@@ -5,6 +5,28 @@ function safeCb(cb, payload) {
   if (typeof cb === "function") cb(payload);
 }
 
+function isSpectator(game, socketId) {
+  return !game.allPlayers.some(p => p.id === socketId);
+}
+
+function emitGameUpdate(io, room, targetSocketId) {
+  if (!room.game) return;
+  const view = isSpectator(room.game, targetSocketId)
+    ? buildSpectatorView(room.game, targetSocketId)
+    : buildPlayerView(room.game, targetSocketId);
+  io.to(targetSocketId).emit("game-update", view);
+}
+
+function emitGameUpdateToAll(io, room) {
+  if (!room.game) return;
+  room.players.forEach(p => {
+    const view = isSpectator(room.game, p.socketId)
+      ? buildSpectatorView(room.game, p.socketId)
+      : buildPlayerView(room.game, p.socketId);
+    io.to(p.socketId).emit("game-update", view);
+  });
+}
+
 function getRoundPoints(player) {
   if (player.isImpostor) {
     return player.isAlive ? 2 : -1.5;
@@ -12,7 +34,7 @@ function getRoundPoints(player) {
   return player.isAlive ? 1 : 0;
 }
 
-function buildPlayerView(game, socketId) {
+export function buildPlayerView(game, socketId) {
   const player = game.allPlayers.find(p => p.id === socketId);
   if (!player) return null;
 
@@ -33,6 +55,45 @@ function buildPlayerView(game, socketId) {
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
     votes: game.votes || {},
+  };
+
+  if (["discussion", "voting", "result"].includes(game.phase)) {
+    return {
+      ...baseView,
+      players: game.allPlayers.map(p => ({
+        id: p.id,
+        name: p.name,
+        emoji: p.emoji,
+        color: p.color,
+        isImpostor: p.isImpostor,
+        isAlive: p.isAlive,
+        score: p.score || 0,
+        globalScore: p.globalScore || 0,
+        hint: p.hint,
+        voted: p.voted || false,
+      }))
+    };
+  }
+
+  return {
+    ...baseView,
+    allPlayers: game.allPlayers.map(p => ({
+      socketId: p.id,
+      name: p.name,
+      ready: p.ready,
+    }))
+  };
+}
+
+// Função para espectadores (vê o jogo mas não participam)
+export function buildSpectatorView(game, socketId) {
+  const baseView = {
+    phase: game.phase,
+    roomCode: game.roomCode,
+    isSpectator: true,
+    whoStart: game.whoStart,
+    twoWordsMode: game.twoWordsMode,
+    votingFinished: game.votingFinished || false,
   };
 
   if (["discussion", "voting", "result"].includes(game.phase)) {
@@ -93,19 +154,27 @@ export function registerGameHandlers(io, socket) {
       voted: false
     }));
 
+    const newHistory = [
+      ...(room.game?.impostorHistory ?? []),
+      gameData.allPlayers.filter(p => p.isImpostor).map(p => p.id)
+    ].slice(-2); // 👈 mantém só as últimas 2
+
+    if (room.waitingPlayers?.length) {
+      room.players.push(...room.waitingPlayers);
+      room.waitingPlayers = [];
+    }
+
     room.game = {
       ...gameData,
       phase: "reveal",
       roomCode,
       hostId: room.hostId,
       votes: {},
-      impostorHistory: room.game?.impostorHistory ?? [],
+      impostorHistory: newHistory,
       usedWords: [...(room.game?.usedWords ?? []), ...gameData.chosenWord],
     };
 
-    room.players.forEach((p) => {
-      io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId));
-    });
+    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
@@ -115,7 +184,7 @@ export function registerGameHandlers(io, socket) {
     if (!room?.game) return;
     const player = room.game.allPlayers.find((p) => p.id === socket.id);
     if (player) player.revealed = true;
-    room.players.forEach((p) => io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId)));
+    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
@@ -124,7 +193,7 @@ export function registerGameHandlers(io, socket) {
     const room = rooms[roomCode];
     if (!room?.game || room.hostId !== socket.id) return;
     room.game.phase = phase;
-    room.players.forEach((p) => io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId)));
+    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
@@ -136,13 +205,18 @@ export function registerGameHandlers(io, socket) {
     const playersForGame = room.players.map((p) => ({ ...p, id: p.socketId }));
     const gameData = initializeGame(playersForGame, config.howManyImpostors, config.twoWordsMode, config.impostorHasHint, config.selectedCategories, config.whoStart, config.impostorCanStart, room.game.impostorHistory, room.game.usedWords);
 
+    if (room.waitingPlayers?.length) {
+      room.players.push(...room.waitingPlayers);
+      room.waitingPlayers = [];
+    }
+    
     gameData.allPlayers = gameData.allPlayers.map(p => {
       const old = room.game.allPlayers.find(op => op.id === p.id);
 
       return {
         ...p,
-        emoji: old.emoji,
-        color: old.color,
+        emoji: old?.emoji ?? p.emoji,
+        color: old?.color ?? p.color,
         revealed: false,
         ready: false,
         voted: false,
@@ -151,7 +225,7 @@ export function registerGameHandlers(io, socket) {
     });
     room.game = { ...gameData, phase: "reveal", roomCode, hostId: room.hostId, votes: {}, impostorHistory: room.game.impostorHistory, usedWords: [...room.game.usedWords, ...gameData.chosenWord] };
 
-    room.players.forEach((p) => io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId)));
+    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
@@ -160,7 +234,19 @@ export function registerGameHandlers(io, socket) {
     const room = rooms[roomCode];
     if (!room) return safeCb(cb, { error: "Sala não existe" });
     socket.join(roomCode);
-    if (room.game) socket.emit("game-update", buildPlayerView(room.game, socket.id));
+    
+    if (room.game) {
+      // Verifica se o jogador está participando ou é espectador
+      const isParticipant = room.game.allPlayers.some(p => p.id === socket.id);
+      
+      if (isParticipant) {
+        // Participante vê a view completa
+        socket.emit("game-update", buildPlayerView(room.game, socket.id));
+      } else {
+        // Espectador vê apenas o que pode observar
+        socket.emit("game-update", buildSpectatorView(room.game, socket.id));
+      }
+    }
     safeCb(cb, { ok: true });
   });
 
@@ -227,7 +313,7 @@ export function registerGameHandlers(io, socket) {
       }
     }
 
-    room.players.forEach(p => io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId)));
+    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
@@ -276,12 +362,7 @@ export function registerGameHandlers(io, socket) {
   }
 
   // 🔄 EMITE UPDATE PARA TODOS
-  room.players.forEach(p => {
-    io.to(p.socketId).emit(
-      "game-update",
-      buildPlayerView(game, p.socketId)
-    );
-  });
+  emitGameUpdateToAll(io, room);
 
   cb?.({ ok: true });
 });
@@ -292,7 +373,7 @@ export function registerGameHandlers(io, socket) {
     if (!room?.game) return;
     const player = room.game.allPlayers.find(p => p.id === socket.id);
     if (player) player.ready = !player.ready;
-    room.players.forEach(p => io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId)));
+    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 }

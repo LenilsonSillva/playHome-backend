@@ -75,24 +75,57 @@ const ICON_COLORS = [
   "#777777",
 ];
 
-function pickImpostors(playerIds, impostorCount, impostorHistory = []) {
-  const lastRound = impostorHistory[impostorHistory.length - 1] || [];
-  const secondLastRound = impostorHistory[impostorHistory.length - 2] || [];
+function pickImpostors(players, howManyImpostors, impostorHistory = []) {
+  const MAX_CONSECUTIVE = 2;
 
-  const blocked = playerIds.filter(
-    (id) => lastRound.includes(id) && secondLastRound.includes(id)
-  );
+  // inicializa contadores
+  const consecutiveCount = {};
+  players.forEach(p => {
+    consecutiveCount[p.id] = 0;
+  });
 
-  let candidates = playerIds.filter((id) => !blocked.includes(id));
-  if (candidates.length < impostorCount) candidates = playerIds;
+  // percorre histórico de trás para frente
+  for (let i = impostorHistory.length - 1; i >= 0; i--) {
+    const round = impostorHistory[i];
 
-  const shuffled = shuffleArray(candidates);
-  return shuffled.slice(0, impostorCount);
+    let someoneBroke = false;
+
+    players.forEach(p => {
+      if (round.includes(p.id)) {
+        consecutiveCount[p.id]++;
+        if (consecutiveCount[p.id] >= MAX_CONSECUTIVE) {
+          someoneBroke = true;
+        }
+      } else {
+        consecutiveCount[p.id] = 0;
+      }
+    });
+
+    if (someoneBroke) break;
+  }
+
+  // bloqueados
+  const blockedIds = players
+    .filter(p => consecutiveCount[p.id] >= MAX_CONSECUTIVE)
+    .map(p => p.id);
+
+  // pool válida
+  let pool = players.filter(p => !blockedIds.includes(p.id));
+
+  // fallback de segurança
+  if (pool.length < howManyImpostors) {
+    pool = [...players];
+  }
+
+  // sorteio
+  return shuffleArray(pool)
+    .slice(0, howManyImpostors)
+    .map(p => p.id);
 }
 
 function createImpostorPlayers(players, impostorNumber, impostorHistory = []) {
   const impostorIds = pickImpostors(
-    players.map((p) => p.id),
+    players,
     impostorNumber,
     impostorHistory
   );

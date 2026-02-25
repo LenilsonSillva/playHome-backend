@@ -55,6 +55,7 @@ export function buildPlayerView(game, socketId) {
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
     votes: game.votes || {},
+    eliminatedId: game.eliminatedId || null,
   };
 
   if (["discussion", "voting", "result"].includes(game.phase)) {
@@ -94,6 +95,7 @@ export function buildSpectatorView(game, socketId) {
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
+    eliminatedId: game.eliminatedId || null, // 👈 E AQUI TAMBÉM
   };
 
   if (["discussion", "voting", "result"].includes(game.phase)) {
@@ -289,9 +291,11 @@ export function registerGameHandlers(io, socket) {
 
         // votação acabou, mas sem eliminação
         // o front mostra o card neutro
+        room.game.eliminatedId = null; // 👈 EMPATE OU NULO: Ninguém foi eliminado
       } else {
         // ELIMINAÇÃO
         const eliminatedId = candidates[0];
+        room.game.eliminatedId = eliminatedId; // 👈 SALVA O ID DE QUEM MORREU
         const playerToKill = room.game.allPlayers.find(p => p.id === eliminatedId);
         if (playerToKill) playerToKill.isAlive = false;
 
@@ -330,6 +334,7 @@ export function registerGameHandlers(io, socket) {
   // 🔄 RESET DE VOTOS (sempre)
   game.votes = {};
   game.votingFinished = false;
+  game.eliminatedId = null;
   game.allPlayers.forEach(p => p.voted = false);
 
   // 🔍 VERIFICA CONDIÇÃO DE FIM DE JOGO

@@ -74,9 +74,7 @@ export function registerRoomHandlers(io, socket) {
   });
 
 socket.on("leave-room", ({ roomCode }, cb) => {
-  console.log(`Usuário ${socket.id} saindo da sala ${roomCode}`);
   handlePlayerExit(io, socket, roomCode, "left");
-  socket.leave(roomCode);
   safeCb(cb, { ok: true });
 });
 

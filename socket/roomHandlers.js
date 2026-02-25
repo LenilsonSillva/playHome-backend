@@ -12,7 +12,6 @@ function normalizeName(name) {
 export function registerRoomHandlers(io, socket) {
   socket.on("create-room", ({ name, id, emoji, color }, cb) => {
     const roomCode = generateRoomCode();
-    console.log(rooms.lenght)
 
     rooms[roomCode] = {
       code: roomCode,

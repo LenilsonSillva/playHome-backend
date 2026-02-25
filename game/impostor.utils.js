@@ -40,11 +40,8 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
     reason, // "left" | "disconnect"
   });
 
-  console.log((room.players.length), (room.phase))
-  console.log(room)
-
   // 🔻 MENOS DE 3 JOGADORES → ENCERRA SALA
-  if ((room.players.length < 3) && (room.game?.phase !== "lobby")) {
+  if ((room.players.length < 3) && (room.game !== null)) {
     io.to(roomCode).emit("force-lobby", {
       reason: "not-enough-players",
     });

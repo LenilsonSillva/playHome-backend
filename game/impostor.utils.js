@@ -40,7 +40,8 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
     reason, // "left" | "disconnect"
   });
 
-  console.log((room.players.length < 3) && (room.phase !== "lobby"))
+  console.log((room.players.length), (room.phase))
+  console.log(room)
 
   // 🔻 MENOS DE 3 JOGADORES → ENCERRA SALA
   if ((room.players.length < 3) && (room.phase !== "lobby")) {

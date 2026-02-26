@@ -74,16 +74,16 @@ export function registerRoomHandlers(io, socket) {
   });
 
 socket.on("leave-room", ({ roomCode }, cb) => {
-  handlePlayerExit(io, socket, roomCode, "left");
   socket.leave(roomCode);
+  handlePlayerExit(io, socket, roomCode, "left");
   safeCb(cb, { ok: true });
 });
 
 socket.on("disconnect", () => {
   Object.entries(rooms).forEach(([roomCode, room]) => {
     if (room.players.some(p => p.socketId === socket.id)) {
-      handlePlayerExit(io, socket, roomCode, "disconnect");
       socket.leave(roomCode);
+      handlePlayerExit(io, socket, roomCode, "disconnect");
     }
   });
 });

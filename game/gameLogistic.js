@@ -8,71 +8,44 @@ export function getImpostorCount(playersCount) {
 }
 
 const PLAYER_ICONS = [
-  "🤫",
-  "😁",
-  "👾",
-  "🧑🏻‍🚀",
-  "👩🏽‍🚀",
-  "👽",
-  "🤖",
-  "😎",
-  "🫥",
-  "🤔",
-  "🤐",
-  "😶‍🌫️",
-  "😶",
-  "🫠",
-  "🥸",
-  "🤥",
-  "🫣",
-  "🧐",
-  "👹",
-  "🫢",
-  "🤓",
-  "😈",
-  "👿",
-  "💀",
-  "👻",
-  "👺",
-  "🧞‍♀️",
-  "🧞‍♂️",
-  "🧟",
-  "🧌",
-  "👨🏻",
-  "👨🏽",
-  "👩🏽",
-  "👩🏻",
-  "🤴🏻",
-  "👸🏻",
-  "🧑🏻‍🎄",
-  "🕵🏻‍♀️",
-  "🦹🏻",
-  "🦸🏻",
-  "🧙🏻",
-  "🧛🏻",
+  "🤫","😁","👾","🧑🏻‍🚀","👩🏽‍🚀","👽","🤖","😎","😛","🤔","🤐",
+  "😶‍🌫️","😶","🫠","🥸","🤥","🫣","🧐","👹","🫢","🤓","😈","👿",
+  "💀","👻","👺","🧞‍♀️","🧞‍♂️","🧟","🧌","👨🏻","👨🏽","👩🏽",
+  "👩🏻","🤴🏻","👸🏻","🧑🏻‍🎄","🕵🏻‍♀️","🦹🏻","🦸🏻","🧙🏻","🧛🏻"
 ];
 
 const ICON_COLORS = [
-  "#ff003c",
-  "#3b82f6",
-  "#facc15",
-  "#51890c",
-  "#6d28d9",
-  "#19a5ac",
-  "#ff7b00",
-  "#ff00fb",
-  "#00ff40",
-  "#69166b",
-  "#7f1d1d",
-  "#075985",
-  "#a16207",
-  "#065f46",
-  "#4c1d95",
-  "#13697f",
-  "#b91c1c",
-  "#1d4ed8",
-  "#ba8d07",
-  "#777777",
+  // --- Vermelhos e Pinks (Perigo/Intensidade) ---
+  "#FF003C", // Red Neon (Principal do Impostor)
+  "#FF3399", // Hot Pink
+  "#FB7185", // Rose Tech
+  
+  // --- Laranjas e Amarelos (Alertas) ---
+  "#FF7B00", // Orange Signal
+  "#FACC15", // Cyber Yellow
+  "#FB923C", // Tangerine
+  "#F59E0B", // Amber Alert
+
+  // --- Verdes (Energia/Sinal) ---
+  "#ADFF2F", // Lime Electric
+  "#22C55E", // Bio Green
+  "#10B981", // Emerald Tech
+  "#4ADE80", // Mint Signal
+
+  // --- Cyans e Teals (Interface/HUD) ---
+  "#00F2FF", // Electric Cyan
+  "#2DD4BF", // Turquoise
+  "#0EA5E9", // Sky Blue
+
+  // --- Blues (Plasma/Sistemas) ---
+  "#3B82F6", // Plasma Blue
+  "#6366F1", // Indigo Neon
+  "#2563EB", // Royal Systems
+
+  // --- Roxos e Magentas (Mistério/Espaço) ---
+  "#8B5CF6", // Electric Violet
+  "#A855F7", // Deep Purple
+  "#D946EF", // Neon Magenta
 ];
 
 function pickImpostors(players, howManyImpostors, impostorHistory = []) {

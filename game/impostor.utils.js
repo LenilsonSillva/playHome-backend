@@ -51,7 +51,7 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
   }
 
   // 👑 SE ERA HOST → PASSA HOST
-  if (room.hostId === socket.id) {
+  if ((room.hostId === socket.id) && (room.game !== null)) {
     const newHost = room.players[Math.floor(Math.random() * room.players.length)];
     // newHost.socketId is the socket identifier used across the codebase
     room.hostId = newHost.socketId;

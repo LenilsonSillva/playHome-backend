@@ -128,7 +128,7 @@ export function buildSpectatorView(game, socketId) {
 
 export function registerGameHandlers(io, socket) {
 
-  console.log(rooms);
+  console.log("rooms", rooms.length);
   // --- START GAME ---
   socket.on("start-game", ({ roomCode, config }, cb) => {
     const room = rooms[roomCode];

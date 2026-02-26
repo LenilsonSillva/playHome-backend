@@ -83,6 +83,7 @@ socket.on("disconnect", () => {
   Object.entries(rooms).forEach(([roomCode, room]) => {
     if (room.players.some(p => p.socketId === socket.id)) {
       handlePlayerExit(io, socket, roomCode, "disconnect");
+      socket.leave(roomCode);
     }
   });
 });

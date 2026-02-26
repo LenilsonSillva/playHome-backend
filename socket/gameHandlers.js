@@ -58,7 +58,7 @@ export function buildPlayerView(game, socketId) {
     eliminatedId: game.eliminatedId || null,
   };
 
-  if (["discussion", "voting", "result"].includes(game.phase)) {
+  if ([ "reveal", "discussion", "voting", "result"].includes(game.phase)) {
     return {
       ...baseView,
       players: game.allPlayers.map(p => ({
@@ -98,7 +98,7 @@ export function buildSpectatorView(game, socketId) {
     eliminatedId: game.eliminatedId || null, // 👈 E AQUI TAMBÉM
   };
 
-  if (["discussion", "voting", "result"].includes(game.phase)) {
+  if (["reveal", "discussion", "voting", "result"].includes(game.phase)) {
     return {
       ...baseView,
       players: game.allPlayers.map(p => ({

@@ -28,74 +28,59 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
   if (!room) return;
 
   const player = room.players.find(p => p.socketId === socket.id);
-  if (!player) return;
+  if (!player) return; // Se o jogador já saiu ou não existe, ignora
 
-  // remove da lista de players
+  // 1. Remove da lista principal de jogadores
   room.players = room.players.filter(p => p.socketId !== socket.id);
 
-  // ALERTA PARA TODOS
+  // 2. Alerta todos que o jogador desconectou
   io.to(roomCode).emit("player-left", {
-    playerId: player.id,
+    playerId: player.id || socket.id,
     name: player.name,
-    reason, // "left" | "disconnect"
+    reason, 
   });
 
-  // 🔻 MENOS DE 3 JOGADORES → ENCERRA SALA
-  if ((room.players.length < 3) && (room.game !== null)) {
-    io.to(roomCode).emit("force-lobby", {
-      reason: "not-enough-players",
-    });
-
+  // 3. 🚨 CORREÇÃO 1: Se a sala ficar totalmente vazia, destrua-a imediatamente!
+  if (room.players.length === 0) {
     delete rooms[roomCode];
     return;
   }
 
-  // 👑 SE ERA HOST → PASSA HOST
-  if ((room.hostId === socket.id) && (room.game !== null)) {
-    const newHost = room.players[Math.floor(Math.random() * room.players.length)];
-    // newHost.socketId is the socket identifier used across the codebase
+  // 4. 🚨 CORREÇÃO 2: Passa a Coroa (Host) SEMPRE! (mesmo se estiver no Lobby)
+  if (room.hostId === socket.id) {
+    const newHost = room.players[0]; // Pega o primeiro que sobrou na lista
     room.hostId = newHost.socketId;
 
-    io.to(roomCode).emit("host-changed", {
-      newHostId: newHost.socketId,
-    });
+    // Avisa o Frontend quem é o novo dono
+    io.to(roomCode).emit("host-changed", { newHostId: newHost.socketId });
 
-    // se houver um jogo em andamento, atualiza o hostId dentro do objeto game
+    // Se o jogo estivesse rolando, garante que ele saiba do novo host também
     if (room.game) {
       room.game.hostId = room.hostId;
-      room.players.forEach(p =>
-        io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
-      );
     }
   }
 
-  // 🎮 SE O JOGO ESTAVA ACONTECENDO
-  // 🎮 SE O JOGO ESTAVA ACONTECENDO
+  // 5. 🎮 LÓGICA DE JOGO EM ANDAMENTO
   if (room.game && room.game.phase !== "lobby") {
-    // Se estamos na fase 'reveal', removemos o jogador do jogo completamente
+    
+    // Se cair para menos de 3 jogadores DURANTE O JOGO, quebra a sala e manda pro lobby
+    if (room.players.length < 3) {
+      io.to(roomCode).emit("force-lobby", { reason: "not-enough-players" });
+      delete rooms[roomCode]; 
+      return;
+    }
+
     if (room.game.phase === "reveal") {
-      const existed = room.game.allPlayers.some(p => p.id === socket.id);
-      if (existed) {
-        room.game.allPlayers = room.game.allPlayers.filter(p => p.id !== socket.id);
-
-        // Emite update para todos com a nova lista (quem saiu não receberá mais)
-        room.players.forEach(p =>
-          io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
-        );
-
-        io.to(roomCode).emit("player-left", {
-          playerId: player.id,
-          name: player.name,
-          reason,
-        });
-      }
+      // Se estava apenas lendo a palavra, tira ele do array completamente
+      room.game.allPlayers = room.game.allPlayers.filter(p => p.id !== socket.id);
     } else {
+      // Nas demais fases (Discussão/Votação), NÃO apagamos do array.
+      // Apenas definimos "isAlive = false" para não quebrar a matemática e histórico de votos.
       const gamePlayer = room.game.allPlayers.find(p => p.id === socket.id);
-
       if (gamePlayer) {
         gamePlayer.isAlive = false;
 
-        // Recalcula condição de vitória
+        // Recalcula se o Impostor ou a Tripulação ganharam com essa queda de jogador
         const alivePlayers = room.game.allPlayers.filter(p => p.isAlive);
         const impostorsAlive = alivePlayers.filter(p => p.isImpostor).length;
         const crewAlive = alivePlayers.length - impostorsAlive;
@@ -104,21 +89,22 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
           room.game.phase = "result";
           room.game.gameOver = true;
         }
+      }
+    }
 
-        // Atualiza todos os players
-        room.players.forEach(p =>
-          io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
-        );
+    // Atualiza o state do jogo para todos que ficaram na partida
+    room.players.forEach(p =>
+      io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
+    );
+  }
 
-        // Emite evento extra para frontend se quiser mostrar mensagem
+  // Emite evento extra para frontend se quiser mostrar mensagem
         io.to(roomCode).emit("player-left", {
           playerId: gamePlayer.id,
           name: gamePlayer.name,
           reason,
         });
-      }
-    }
-  }
 
+  // 6. Finalmente, atualiza as telas do Lobby
   io.to(roomCode).emit("room-updated", room);
 }

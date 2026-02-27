@@ -1,4 +1,4 @@
-import { buildPlayerView } from "../socket/gameHandlers.js";
+import { buildPlayerView, buildSpectatorView } from "../socket/gameHandlers.js";
 import { rooms } from "../state/rooms.js";
 
 export function shuffleArray(array) {

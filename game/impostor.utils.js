@@ -112,9 +112,17 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
         }
 
         // Atualiza todos os players
-        room.players.forEach(p =>
-          io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
-        );
+        // 🔥 ATUALIZADO: Atualiza o state do jogo respeitando quem é Espectador
+      room.players.forEach(p => {
+        // Verifica se a pessoa NÃO ESTÁ na lista de jogadores do jogo (ou seja, é espectador)
+        const isSpectator = !room.game.allPlayers.some(gp => gp.id === p.socketId);
+        
+        const view = isSpectator 
+          ? buildSpectatorView(room.game, p.socketId) 
+          : buildPlayerView(room.game, p.socketId);
+          
+        io.to(p.socketId).emit("game-update", view);
+      });
 
         // Emite evento extra para frontend se quiser mostrar mensagem
         io.to(roomCode).emit("player-left", {

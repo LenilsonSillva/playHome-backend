@@ -115,7 +115,9 @@ const shuffledColors = shuffleArray([...ICON_COLORS]);
       emoji: shuffledIcons[index],
       color: shuffledColors[index],
       revealed: false,
-      ready: false
+      ready: false,
+      score: 0,
+      globalScore: p.globalScore ?? 0
     };
   });
 }

@@ -1,37 +1,65 @@
 import { rooms } from "../state/rooms.js";
 import { initializeGame } from "../game/gameLogistic.js";
+import { 
+  calculateAndApplyScores, 
+  resetScoresForNewRound,
+  getRoundPoints 
+} from "../game/scoringSystem.js";
 
 function safeCb(cb, payload) {
   if (typeof cb === "function") cb(payload);
 }
 
+/**
+ * Verifica se um socketId é espectador da partida
+ * @param {GameState} game 
+ * @param {string} socketId - ID do socket (not game id)
+ * @returns {boolean}
+ */
 function isSpectator(game, socketId) {
   return !game.allPlayers.some(p => p.id === socketId);
 }
 
-function emitGameUpdate(io, room, targetSocketId) {
+/**
+ * Emite atualização do jogo para um jogador específico
+ * Detecta automaticamente se é participante ou espectador
+ * @param {Server} io - Socket.io server
+ * @param {Room} room - Room object
+ * @param {string} socketId - Socket ID do destinatário
+ */
+function emitGameUpdate(io, room, socketId) {
   if (!room.game) return;
-  const view = isSpectator(room.game, targetSocketId)
-    ? buildSpectatorView(room.game, targetSocketId)
-    : buildPlayerView(room.game, targetSocketId);
-  io.to(targetSocketId).emit("game-update", view);
+  const view = isSpectator(room.game, socketId)
+    ? buildSpectatorView(room.game, socketId)
+    : buildPlayerView(room.game, socketId);
+  io.to(socketId).emit("game-update", view);
 }
 
+/**
+ * Emite atualização para TODOS na sala
+ * Cada um recebe a view apropriada (participante ou espectador)
+ * @param {Server} io - Socket.io server
+ * @param {Room} room - Room object
+ */
 function emitGameUpdateToAll(io, room) {
   if (!room.game) return;
+  
+  // Envia para jogadores ativos
   room.players.forEach(p => {
-    const view = isSpectator(room.game, p.socketId)
-      ? buildSpectatorView(room.game, p.socketId)
+    const isSpect = isSpectator(room.game, p.socketId);
+    const view = isSpect
+      ? buildSpectatorView(room.game, p.socketId, p)
       : buildPlayerView(room.game, p.socketId);
     io.to(p.socketId).emit("game-update", view);
   });
-}
-
-function getRoundPoints(player) {
-  if (player.isImpostor) {
-    return player.isAlive ? 2 : -1.5;
+  
+  // Também envia para waiting players (espectadores que entraram durante o jogo)
+  if (room.waitingPlayers?.length > 0) {
+    room.waitingPlayers.forEach(p => {
+      const view = buildSpectatorView(room.game, p.socketId, p);
+      io.to(p.socketId).emit("game-update", view);
+    });
   }
-  return player.isAlive ? 1 : 0;
 }
 
 export function buildPlayerView(game, socketId) {
@@ -86,18 +114,32 @@ export function buildPlayerView(game, socketId) {
   };
 }
 
-// Função para espectadores (vê o jogo mas não participam)
-export function buildSpectatorView(game, socketId) {
+/**
+ * View para ESPECTADORES
+ * Ve o jogo mas não participa ativamente
+ * 
+ * @param {GameState} game 
+ * @param {string} socketId - Socket ID do espectador
+ * @param {PlayerBase} spectatorData - Dados do espectador (name, emoji, color)
+ * @returns {PlayerViewSpectator}
+ */
+export function buildSpectatorView(game, socketId, spectatorData = {}) {
   const baseView = {
     phase: game.phase,
     roomCode: game.roomCode,
     isSpectator: true,
+    // Dados do próprio espectador (para identificação na UI)
+    myName: spectatorData.name || "Espectador",
+    myEmoji: spectatorData.emoji || "👁️",
+    myColor: spectatorData.color || "#666666",
+    // Contexto do jogo
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
-    eliminatedId: game.eliminatedId || null, // 👈 E AQUI TAMBÉM
+    eliminatedId: game.eliminatedId || null,
   };
 
+  // Em fases onde há interação, mostra todos os dados dos players
   if (["reveal", "discussion", "voting", "result"].includes(game.phase)) {
     return {
       ...baseView,
@@ -116,6 +158,7 @@ export function buildSpectatorView(game, socketId) {
     };
   }
 
+  // Em fase de lobby, mostra apenas quem está na sala
   return {
     ...baseView,
     allPlayers: game.allPlayers.map(p => ({
@@ -238,7 +281,10 @@ export function registerGameHandlers(io, socket) {
     socket.join(roomCode);
     
     if (room.game) {
-      // Verifica se o jogador está participando ou é espectador
+      // Encontra dados do jogador na sala
+      const playerInRoom = room.players.find(p => p.socketId === socket.id);
+      
+      // Verifica se o jogador está participando do jogo ou é espectador
       const isParticipant = room.game.allPlayers.some(p => p.id === socket.id);
       
       if (isParticipant) {
@@ -246,7 +292,8 @@ export function registerGameHandlers(io, socket) {
         socket.emit("game-update", buildPlayerView(room.game, socket.id));
       } else {
         // Espectador vê apenas o que pode observar
-        socket.emit("game-update", buildSpectatorView(room.game, socket.id));
+        // Passa dados pessoais para a view do espectador
+        socket.emit("game-update", buildSpectatorView(room.game, socket.id, playerInRoom));
       }
     }
     safeCb(cb, { ok: true });
@@ -322,55 +369,42 @@ export function registerGameHandlers(io, socket) {
   });
 
   socket.on("confirm-elimination", ({ roomCode }, cb) => {
-  const room = rooms[roomCode];
-  if (!room?.game) return;
+    const room = rooms[roomCode];
+    if (!room?.game) return;
 
-  if (room.hostId !== socket.id) {
-    return cb?.({ error: "Somente o host pode prosseguir" });
-  }
+    if (room.hostId !== socket.id) {
+      return cb?.({ error: "Somente o host pode prosseguir" });
+    }
 
-  const game = room.game;
+    const game = room.game;
 
-  // 🔄 RESET DE VOTOS (sempre)
-  game.votes = {};
-  game.votingFinished = false;
-  game.eliminatedId = null;
-  game.allPlayers.forEach(p => p.voted = false);
+    // 🔄 RESET DE VOTOS (sempre)
+    game.votes = {};
+    game.votingFinished = false;
+    game.eliminatedId = null;
+    game.allPlayers.forEach(p => p.voted = false);
 
-  // 🔍 VERIFICA CONDIÇÃO DE FIM DE JOGO
- const alivePlayers = game.allPlayers.filter(p => p.isAlive);
-  const impostorsAlive = alivePlayers.filter(p => p.isImpostor).length;
-  const crewAlive = alivePlayers.length - impostorsAlive;
+    // 🔍 VERIFICA CONDIÇÃO DE FIM DE JOGO
+    const alivePlayers = game.allPlayers.filter(p => p.isAlive);
+    const impostorsAlive = alivePlayers.filter(p => p.isImpostor).length;
+    const crewAlive = alivePlayers.length - impostorsAlive;
 
-  const isGameOver =
-    impostorsAlive === 0 || impostorsAlive >= crewAlive;
+    const isGameOver = impostorsAlive === 0 || impostorsAlive >= crewAlive;
 
-  // 🏁 SE O JOGO ACABOU → CALCULA PONTUAÇÃO FINAL
-  if (isGameOver) {
-    game.allPlayers.forEach(player => {
-      const roundPoints = getRoundPoints(player);
+    // 🏁 SE O JOGO ACABOU → CALCULA PONTUAÇÃO FINAL
+    if (isGameOver) {
+      // Usa sistema de scoring padronizado
+      calculateAndApplyScores(game, true);
+      game.phase = "result";
+    } else {
+      // 🔁 CONTINUA O JOGO
+      game.phase = "discussion";
+    }
 
-      // score da rodada
-      player.score = (player.score || 0) + roundPoints;
-
-      // soma no placar global
-      player.globalScore = (player.globalScore || 0) + player.score;
-
-      // zera score da rodada
-      player.score = 0;
-    });
-
-    game.phase = "result";
-  } else {
-    // 🔁 CONTINUA O JOGO (empate ou eliminação normal)
-    game.phase = "discussion";
-  }
-
-  // 🔄 EMITE UPDATE PARA TODOS
-  emitGameUpdateToAll(io, room);
-
-  cb?.({ ok: true });
-});
+    // 🔄 EMITE UPDATE PARA TODOS
+    emitGameUpdateToAll(io, room);
+    cb?.({ ok: true });
+  });
 
 
   socket.on("toggle-ready", ({ roomCode }, cb) => {

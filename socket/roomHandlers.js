@@ -34,42 +34,45 @@ export function registerRoomHandlers(io, socket) {
   socket.on("join-room", ({ name, id, emoji, color, roomCode }, cb) => {
     const room = rooms[roomCode];
     if (!room) return safeCb(cb, { error: "Sala não existe" });
-    if (room.phase !== "lobby") return safeCb(cb, { error: "Jogo já começou" });
 
-      const normalized = normalizeName(name);
-
+    // Validação do nome
+    const normalized = normalizeName(name);
     const nameAlreadyUsed = room.players.some(
-        (p) => normalizeName(p.name) === normalized
+      (p) => normalizeName(p.name) === normalized
     );
 
     if (nameAlreadyUsed) {
-        return cb({ error: "Esse nome já está sendo usado na sala" });
+      return cb({ error: "Esse nome já está sendo usado na sala" });
     }
 
+    const newPlayer = {
+      socketId: socket.id,
+      id,
+      name: name.trim(),
+      emoji,
+      color,
+    };
+
+    // 🎮 Se o jogo JÁ COMEÇOU (fase !== lobby)
     if (room.phase !== "lobby") {
+      // → Adiciona como ESPECTADOR (waiting player)
+      // Espectador aguarda a próxima rodada para virar jogador
       room.waitingPlayers ??= [];
-
-      room.waitingPlayers.push({
-        socketId: socket.id,
-        id,
-        name,
-        emoji,
-        color,
-      });
-
+      room.waitingPlayers.push(newPlayer);
       socket.join(roomCode);
 
       return safeCb(cb, {
         waiting: true,
         message: "Aguardando próxima rodada",
+        isSpectator: true,
       });
     }
 
-    room.players.push({ socketId: socket.id, id, name: name.trim(), emoji, color });
+    // 🏠 Se jogo está em LOBBY → Adiciona como jogador normal
+    room.players.push(newPlayer);
     socket.join(roomCode);
 
     io.to(roomCode).emit("room-updated", room);
-
     safeCb(cb, { ok: true });
   });
 

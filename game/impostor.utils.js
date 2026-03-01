@@ -27,11 +27,17 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
   const room = rooms[roomCode];
   if (!room) return;
 
+  // Procura o jogador em ambas as listas
   const player = room.players.find(p => p.socketId === socket.id);
-  if (!player) return; // Se o jogador já saiu ou não existe, ignora
+  if (!player) return; // Jogador não encontrado
 
   // 1. Remove da lista principal de jogadores
   room.players = room.players.filter(p => p.socketId !== socket.id);
+  
+  // 2. Remove de waiting players também (se estiver lá como espectador)
+  if (room.waitingPlayers?.length > 0) {
+    room.waitingPlayers = room.waitingPlayers.filter(p => p.socketId !== socket.id);
+  }
 
   // ALERTA PARA TODOS
   io.to(roomCode).emit("player-left", {
@@ -40,7 +46,7 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
     reason, // "left" | "disconnect"
   });
 
-  // 🔻 MENOS DE 3 JOGADORES → ENCERRA SALA NO JOGO
+  // 🔻 MENOS DE 3 JOGADORES ATIVOS → ENCERRA SALA SE HOUVER JOGO
   if ((room.players.length < 3) && (room.game !== null)) {
     io.to(roomCode).emit("force-lobby", {
       reason: "not-enough-players",
@@ -50,7 +56,7 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
     return;
   }
 
-   // Se a sala ficar totalmente vazia, destrua-a imediatamente!
+  // Se a sala ficar totalmente vazia, destrua-a imediatamente
   if (room.players.length === 0) {
     delete rooms[roomCode];
     return;
@@ -59,43 +65,58 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
   // 👑 SE ERA HOST → PASSA HOST
   if ((room.hostId === socket.id)) {
     const newHost = room.players[Math.floor(Math.random() * room.players.length)];
-    // newHost.socketId is the socket identifier used across the codebase
     room.hostId = newHost.socketId;
 
     io.to(roomCode).emit("host-changed", {
       newHostId: newHost.socketId,
     });
 
-    // se houver um jogo em andamento, atualiza o hostId dentro do objeto game
+    // Se houver um jogo em andamento, atualiza o hostId
     if (room.game) {
       room.game.hostId = room.hostId;
-      room.players.forEach(p =>
-        io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
-      );
+      // Emite updates para todos respeitando status de participante/espectador
+      room.players.forEach(p => {
+        const isSpect = !room.game.allPlayers.some(gp => gp.id === p.socketId);
+        const view = isSpect 
+          ? buildSpectatorView(room.game, p.socketId, p) 
+          : buildPlayerView(room.game, p.socketId);
+        io.to(p.socketId).emit("game-update", view);
+      });
+      if (room.waitingPlayers?.length > 0) {
+        room.waitingPlayers.forEach(p => {
+          const view = buildSpectatorView(room.game, p.socketId, p);
+          io.to(p.socketId).emit("game-update", view);
+        });
+      }
     }
   }
 
   // 🎮 SE O JOGO ESTAVA ACONTECENDO
-  // 🎮 SE O JOGO ESTAVA ACONTECENDO
   if (room.game && room.game.phase !== "lobby") {
-    // Se estamos na fase 'reveal', removemos o jogador do jogo completamente
+    // Se está na fase 'reveal', remove o jogador do jogo completamente
     if (room.game.phase === "reveal") {
       const existed = room.game.allPlayers.some(p => p.id === socket.id);
       if (existed) {
         room.game.allPlayers = room.game.allPlayers.filter(p => p.id !== socket.id);
 
-        // Emite update para todos com a nova lista (quem saiu não receberá mais)
-        room.players.forEach(p =>
-          io.to(p.socketId).emit("game-update", buildPlayerView(room.game, p.socketId))
-        );
-
-        io.to(roomCode).emit("player-left", {
-          playerId: player.id,
-          name: player.name,
-          reason,
+        // Emite update para todos
+        room.players.forEach(p => {
+          const isSpect = !room.game.allPlayers.some(gp => gp.id === p.socketId);
+          const view = isSpect 
+            ? buildSpectatorView(room.game, p.socketId, p) 
+            : buildPlayerView(room.game, p.socketId);
+          io.to(p.socketId).emit("game-update", view);
         });
+        
+        if (room.waitingPlayers?.length > 0) {
+          room.waitingPlayers.forEach(p => {
+            const view = buildSpectatorView(room.game, p.socketId, p);
+            io.to(p.socketId).emit("game-update", view);
+          });
+        }
       }
     } else {
+      // Em outras fases, marca como morto ao invés de remover
       const gamePlayer = room.game.allPlayers.find(p => p.id === socket.id);
 
       if (gamePlayer) {
@@ -111,25 +132,21 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
           room.game.gameOver = true;
         }
 
-        // Atualiza todos os players
-        // 🔥 ATUALIZADO: Atualiza o state do jogo respeitando quem é Espectador
-      room.players.forEach(p => {
-        // Verifica se a pessoa NÃO ESTÁ na lista de jogadores do jogo (ou seja, é espectador)
-        const isSpectator = !room.game.allPlayers.some(gp => gp.id === p.socketId);
-        
-        const view = isSpectator 
-          ? buildSpectatorView(room.game, p.socketId) 
-          : buildPlayerView(room.game, p.socketId);
-          
-        io.to(p.socketId).emit("game-update", view);
-      });
-
-        // Emite evento extra para frontend se quiser mostrar mensagem
-        io.to(roomCode).emit("player-left", {
-          playerId: gamePlayer.id,
-          name: gamePlayer.name,
-          reason,
+        // Atualiza TODOS (participantes e espectadores)
+        room.players.forEach(p => {
+          const isSpect = !room.game.allPlayers.some(gp => gp.id === p.socketId);
+          const view = isSpect 
+            ? buildSpectatorView(room.game, p.socketId, p) 
+            : buildPlayerView(room.game, p.socketId);
+          io.to(p.socketId).emit("game-update", view);
         });
+        
+        if (room.waitingPlayers?.length > 0) {
+          room.waitingPlayers.forEach(p => {
+            const view = buildSpectatorView(room.game, p.socketId, p);
+            io.to(p.socketId).emit("game-update", view);
+          });
+        }
       }
     }
   }

@@ -64,7 +64,27 @@ export function handlePlayerExit(io, socket, roomCode, reason = "left") {
 
   // 👑 SE ERA HOST → PASSA HOST
   if ((room.hostId === socket.id)) {
-    const newHost = room.players[Math.floor(Math.random() * room.players.length)];
+    // ✅ Seleciona novo host APENAS DE JOGADORES ATIVOS (não espectadores)
+    // Se houver jogo em andamento, pega do game.allPlayers
+    // Se não, pega qualquer um de room.players
+    let candidates = [];
+    
+    if (room.game?.allPlayers?.length > 0) {
+      // Jogo em progresso: novo host deve ser jogador ativo
+      candidates = room.players.filter(p =>
+        room.game.allPlayers.some(gp => gp.id === p.socketId)
+      );
+    } else {
+      // Sem jogo ou em lobby: qualquer jogador em room.players (não espectador)
+      candidates = room.players;
+    }
+
+    if (candidates.length === 0) {
+      // Sem candidatos válidos, não há o que fazer
+      return;
+    }
+
+    const newHost = candidates[Math.floor(Math.random() * candidates.length)];
     room.hostId = newHost.socketId;
 
     io.to(roomCode).emit("host-changed", {

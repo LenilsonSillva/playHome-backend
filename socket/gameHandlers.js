@@ -188,6 +188,8 @@ export function registerGameHandlers(io, socket) {
       config.selectedCategories,
       config.whoStart,
       config.impostorCanStart,
+      config.impostorTrap,
+      config.impostorCat,
       room.game?.impostorHistory ?? [],
       room.game?.usedWords ?? []
     );
@@ -248,7 +250,17 @@ export function registerGameHandlers(io, socket) {
     if (!room?.game || room.hostId !== socket.id) return;
     const config = room.config;
     const playersForGame = room.players.map((p) => ({ ...p, id: p.socketId }));
-    const gameData = initializeGame(playersForGame, config.howManyImpostors, config.twoWordsMode, config.impostorHasHint, config.selectedCategories, config.whoStart, config.impostorCanStart, room.game.impostorHistory, room.game.usedWords);
+    const gameData = initializeGame(playersForGame, 
+      config.howManyImpostors, 
+      config.twoWordsMode, 
+      config.impostorHasHint, 
+      config.selectedCategories, 
+      config.whoStart, 
+      config.impostorCanStart, 
+      config.impostorTrap, 
+      config.impostorCat, 
+      room.game.impostorHistory, 
+      room.game.usedWords);
 
     if (room.waitingPlayers?.length) {
       room.players.push(...room.waitingPlayers);

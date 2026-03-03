@@ -131,7 +131,7 @@ function selectWhoStart(playersData, whoStartButton, impostorCanStart) {
   return candidate.name;
 }
 
-function distributeWords(players, twoWordsMode, selectedCategories, wordBank, impostorHasHint, usedWords = []) {
+function distributeWords(players, twoWordsMode, selectedCategories, wordBank, impostorHasHint, impostorTrap, impostorCat, usedWords = []) {
   let filteredWords = wordBank.filter((word) =>
     selectedCategories.includes(word.category)
   );
@@ -161,10 +161,31 @@ function distributeWords(players, twoWordsMode, selectedCategories, wordBank, im
 
   const updatedPlayers = players.map((player) => {
     if (player.isImpostor) {
+      let hint = undefined;
+
+      // 🔥 Lógica da Dica/ Categotia - Enganar Impostor
+      if (impostorHasHint) {
+        if (impostorCat) {
+          hint = word.category;
+        } else {
+          hint = word.hint;
+        }
+
+        // Se a armadilha está ativa, 50% de chance de embaralhar
+        if (impostorTrap && Math.random() < 0.5) {
+          const randomFakeWord = pickRandom(wordBank.filter(w => w.word !== word.word));
+          if (impostorCat) {
+            hint = `Categoria: ${randomFakeWord.category}`;
+          } else {
+            hint = randomFakeWord.hint;
+          }
+        }
+      }
+
       return {
         ...player,
         word: null,
-        hint: impostorHasHint ? word.hint : undefined,
+        hint: hint,
       };
     } else {
       const finalWord =
@@ -184,6 +205,8 @@ export function initializeGame(
   selectedCategories,
   whoStartButton,
   impostorCanStart,
+  impostorTrap,
+  impostorCat,
   impostorHistory = [],
   usedWords = [],
 ) {
@@ -199,6 +222,8 @@ export function initializeGame(
     selectedCategories,
     WORDS,
     impostorHasHint,
+    impostorTrap,
+    impostorCat, 
     usedWords
   );
 
@@ -213,6 +238,8 @@ export function initializeGame(
     howManyImpostors,
     twoWordsMode,
     impostorHasHint,
+    impostorTrap,
+    impostorCat,
     selectedCategories,
     whoStart: setWhoStart,
     impostorCanStart,

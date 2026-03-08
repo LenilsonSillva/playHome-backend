@@ -10,23 +10,10 @@ function safeCb(cb, payload) {
   if (typeof cb === "function") cb(payload);
 }
 
-/**
- * Verifica se um socketId é espectador da partida
- * @param {GameState} game 
- * @param {string} socketId - ID do socket (not game id)
- * @returns {boolean}
- */
 function isSpectator(game, socketId) {
   return !game.allPlayers.some(p => p.id === socketId);
 }
 
-/**
- * Emite atualização do jogo para um jogador específico
- * Detecta automaticamente se é participante ou espectador
- * @param {Server} io - Socket.io server
- * @param {Room} room - Room object
- * @param {string} socketId - Socket ID do destinatário
- */
 function emitGameUpdate(io, room, socketId) {
   if (!room.game) return;
   const view = isSpectator(room.game, socketId)
@@ -35,16 +22,9 @@ function emitGameUpdate(io, room, socketId) {
   io.to(socketId).emit("game-update", view);
 }
 
-/**
- * Emite atualização para TODOS na sala
- * Cada um recebe a view apropriada (participante ou espectador)
- * @param {Server} io - Socket.io server
- * @param {Room} room - Room object
- */
 function emitGameUpdateToAll(io, room) {
   if (!room.game) return;
   
-  // Envia para jogadores ativos
   room.players.forEach(p => {
     const isSpect = isSpectator(room.game, p.socketId);
     const view = isSpect
@@ -53,13 +33,47 @@ function emitGameUpdateToAll(io, room) {
     io.to(p.socketId).emit("game-update", view);
   });
   
-  // Também envia para waiting players (espectadores que entraram durante o jogo)
   if (room.waitingPlayers?.length > 0) {
     room.waitingPlayers.forEach(p => {
       const view = buildSpectatorView(room.game, p.socketId, p);
       io.to(p.socketId).emit("game-update", view);
     });
   }
+}
+
+// 🔥 NOVA FUNÇÃO AUXILIAR: Calcula o morto. Usada pelo botão e pelo cronômetro!
+function processVotingResults(room, io) {
+  room.game.votingFinished = true;
+  const voteCount = {};
+  
+  Object.values(room.game.votes).forEach(id => {
+    if (id && id !== "NULO") {
+      voteCount[id] = (voteCount[id] || 0) + 1;
+    }
+  });
+
+  let maxVotes = 0;
+  let candidates = [];
+  Object.entries(voteCount).forEach(([id, count]) => {
+    if (count > maxVotes) {
+      maxVotes = count;
+      candidates =[id];
+    } else if (count === maxVotes) {
+      candidates.push(id);
+    }
+  });
+
+  // Empate ou Nulos
+  if (candidates.length !== 1 || maxVotes === 0) {
+    room.game.eliminatedId = null; 
+  } else {
+    const eliminatedId = candidates[0];
+    room.game.eliminatedId = eliminatedId; 
+    const playerToKill = room.game.allPlayers.find(p => p.id === eliminatedId);
+    if (playerToKill) playerToKill.isAlive = false;
+  }
+
+  emitGameUpdateToAll(io, room);
 }
 
 export function buildPlayerView(game, socketId) {
@@ -82,6 +96,7 @@ export function buildPlayerView(game, socketId) {
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
+    votingEndTime: game.votingEndTime || null, // 🔥 O Servidor manda o tempo pro App!
     votes: game.votes || {},
     eliminatedId: game.eliminatedId || null,
   };
@@ -107,64 +122,42 @@ export function buildPlayerView(game, socketId) {
   return {
     ...baseView,
     allPlayers: game.allPlayers.map(p => ({
-      socketId: p.id,
-      name: p.name,
-      ready: p.ready,
+      socketId: p.id, name: p.name, ready: p.ready,
     }))
   };
 }
 
-/**
- * View para ESPECTADORES
- * Ve o jogo mas não participa ativamente
- * 
- * @param {GameState} game 
- * @param {string} socketId - Socket ID do espectador
- * @param {PlayerBase} spectatorData - Dados do espectador (name, emoji, color)
- * @returns {PlayerViewSpectator}
- */
 export function buildSpectatorView(game, socketId, spectatorData = {}) {
   const baseView = {
     phase: game.phase,
     roomCode: game.roomCode,
     isSpectator: true,
-    // Dados do próprio espectador (para identificação na UI)
     myName: spectatorData.name || "Espectador",
     myEmoji: spectatorData.emoji || "👁️",
     myColor: spectatorData.color || "#666666",
-    // Contexto do jogo
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
+    votingEndTime: game.votingEndTime || null, // 🔥 Adicionado aqui também
     eliminatedId: game.eliminatedId || null,
   };
 
-  // Em fases onde há interação, mostra todos os dados dos players
   if (["reveal", "discussion", "voting", "result"].includes(game.phase)) {
     return {
       ...baseView,
       players: game.allPlayers.map(p => ({
-        id: p.id,
-        name: p.name,
-        emoji: p.emoji,
-        color: p.color,
-        isImpostor: p.isImpostor,
-        isAlive: p.isAlive,
-        score: p.score || 0,
-        globalScore: p.globalScore || 0,
-        hint: p.hint,
-        voted: p.voted || false,
+        id: p.id, name: p.name, emoji: p.emoji, color: p.color,
+        isImpostor: p.isImpostor, isAlive: p.isAlive,
+        score: p.score || 0, globalScore: p.globalScore || 0,
+        hint: p.hint, voted: p.voted || false,
       }))
     };
   }
 
-  // Em fase de lobby, mostra apenas quem está na sala
   return {
     ...baseView,
     allPlayers: game.allPlayers.map(p => ({
-      socketId: p.id,
-      name: p.name,
-      ready: p.ready,
+      socketId: p.id, name: p.name, ready: p.ready,
     }))
   };
 }
@@ -181,43 +174,29 @@ export function registerGameHandlers(io, socket) {
     const playersForGame = room.players.map((p) => ({ ...p, id: p.socketId }));
 
     const gameData = initializeGame(
-      playersForGame,
-      config.howManyImpostors,
-      config.twoWordsMode,
-      config.impostorHasHint,
-      config.selectedCategories,
-      config.whoStart,
-      config.impostorCanStart,
-      config.impostorTrap,
-      config.impostorCat,
-      room.game?.impostorHistory ?? [],
-      room.game?.usedWords ?? []
+      playersForGame, config.howManyImpostors, config.twoWordsMode,
+      config.impostorHasHint, config.selectedCategories, config.whoStart,
+      config.impostorCanStart, config.impostorTrap, config.impostorCat,
+      room.game?.impostorHistory ??[], room.game?.usedWords ??[]
     );
 
     gameData.allPlayers = gameData.allPlayers.map((p) => ({
-      ...p,
-      revealed: false,
-      ready: false,
-      voted: false
+      ...p, revealed: false, ready: false, voted: false
     }));
 
     const newHistory = [
       ...(room.game?.impostorHistory ?? []),
       gameData.allPlayers.filter(p => p.isImpostor).map(p => p.id)
-    ].slice(-2); // 👈 mantém só as últimas 2
+    ].slice(-2);
 
     if (room.waitingPlayers?.length) {
       room.players.push(...room.waitingPlayers);
-      room.waitingPlayers = [];
+      room.waitingPlayers =[];
     }
 
     room.game = {
-      ...gameData,
-      phase: "reveal",
-      roomCode,
-      hostId: room.hostId,
-      votes: {},
-      impostorHistory: newHistory,
+      ...gameData, phase: "reveal", roomCode, hostId: room.hostId,
+      votes: {}, impostorHistory: newHistory,
       usedWords: [...(room.game?.usedWords ?? []), ...gameData.chosenWord],
     };
 
@@ -225,7 +204,6 @@ export function registerGameHandlers(io, socket) {
     safeCb(cb, { ok: true });
   });
 
-  // --- REVEAL WORD ---
   socket.on("reveal-word", ({ roomCode }, cb) => {
     const room = rooms[roomCode];
     if (!room?.game) return;
@@ -239,45 +217,68 @@ export function registerGameHandlers(io, socket) {
   socket.on("next-phase", ({ roomCode, phase }, cb) => {
     const room = rooms[roomCode];
     if (!room?.game || room.hostId !== socket.id) return;
+    
     room.game.phase = phase;
+
+    // 🔥 O SERVIDOR ASSUME O CRONÔMETRO
+    if (phase === "voting") {
+      const TOTAL_TIME_MS = 60000; // 60 segundos
+      room.game.votingEndTime = Date.now() + TOTAL_TIME_MS; // Salva pra mandar pro Frontend
+      room.game.votes = {}; 
+      
+      // Limpa timer se existir
+      if (room.game.votingTimeout) clearTimeout(room.game.votingTimeout);
+
+      // Cria a BOMBA RELÓGIO
+      room.game.votingTimeout = setTimeout(() => {
+        if (!room.game) return; 
+        
+        const alivePlayers = room.game.allPlayers.filter(p => p.isAlive);
+        // O tempo acabou! Força NULO em quem não votou
+        alivePlayers.forEach(p => {
+          if (!room.game.votes[p.id]) {
+            room.game.votes[p.id] = "NULO";
+            p.voted = true;
+          }
+        });
+
+        if (!room.game.votingFinished) {
+          processVotingResults(room, io);
+        }
+      }, TOTAL_TIME_MS);
+    } else {
+      if (room.game.votingTimeout) {
+        clearTimeout(room.game.votingTimeout);
+        room.game.votingTimeout = null;
+      }
+    }
+
     emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
-  // --- REROLL GAME ---
   socket.on("reroll-game", ({ roomCode }, cb) => {
     const room = rooms[roomCode];
     if (!room?.game || room.hostId !== socket.id) return;
     const config = room.config;
     const playersForGame = room.players.map((p) => ({ ...p, id: p.socketId }));
-    const gameData = initializeGame(playersForGame, 
-      config.howManyImpostors, 
-      config.twoWordsMode, 
-      config.impostorHasHint, 
-      config.selectedCategories, 
-      config.whoStart, 
-      config.impostorCanStart, 
-      config.impostorTrap, 
-      config.impostorCat, 
-      room.game.impostorHistory, 
-      room.game.usedWords);
+    const gameData = initializeGame(
+      playersForGame, config.howManyImpostors, config.twoWordsMode, 
+      config.impostorHasHint, config.selectedCategories, config.whoStart, 
+      config.impostorCanStart, config.impostorTrap, config.impostorCat, 
+      room.game.impostorHistory, room.game.usedWords
+    );
 
     if (room.waitingPlayers?.length) {
       room.players.push(...room.waitingPlayers);
-      room.waitingPlayers = [];
+      room.waitingPlayers =[];
     }
     
     gameData.allPlayers = gameData.allPlayers.map(p => {
       const old = room.game.allPlayers.find(op => op.id === p.id);
-
       return {
-        ...p,
-        emoji: old?.emoji ?? p.emoji,
-        color: old?.color ?? p.color,
-        revealed: false,
-        ready: false,
-        voted: false,
-        globalScore: old?.globalScore ?? 0,
+        ...p, emoji: old?.emoji ?? p.emoji, color: old?.color ?? p.color,
+        revealed: false, ready: false, voted: false, globalScore: old?.globalScore ?? 0,
       };
     });
     room.game = { ...gameData, phase: "reveal", roomCode, hostId: room.hostId, votes: {}, impostorHistory: room.game.impostorHistory, usedWords: [...room.game.usedWords, ...gameData.chosenWord] };
@@ -286,138 +287,84 @@ export function registerGameHandlers(io, socket) {
     safeCb(cb, { ok: true });
   });
 
-  // --- REJOIN ---
   socket.on("rejoin-room", ({ roomCode }, cb) => {
     const room = rooms[roomCode];
     if (!room) return safeCb(cb, { error: "Sala não existe" });
     socket.join(roomCode);
     
     if (room.game) {
-      // Encontra dados do jogador na sala
       const playerInRoom = room.players.find(p => p.socketId === socket.id);
-      
-      // Verifica se o jogador está participando do jogo ou é espectador
       const isParticipant = room.game.allPlayers.some(p => p.id === socket.id);
-      
       if (isParticipant) {
-        // Participante vê a view completa
         socket.emit("game-update", buildPlayerView(room.game, socket.id));
       } else {
-        // Espectador vê apenas o que pode observar
-        // Passa dados pessoais para a view do espectador
         socket.emit("game-update", buildSpectatorView(room.game, socket.id, playerInRoom));
       }
     }
     safeCb(cb, { ok: true });
   });
 
-  // --- LÓGICA DE VOTO ONLINE IGUAL AO OFFLINE ---
+  // --- LÓGICA DE VOTO ONLINE ---
   socket.on("cast-vote", ({ roomCode, votedId }, cb) => {
     const room = rooms[roomCode];
     if (!room?.game) return;
+    if (room.game.votingFinished) return safeCb(cb, { ok: true });
+
+    // Segurança: Somente vivos votam
+    const playerWhoVoted = room.game.allPlayers.find(p => p.id === socket.id);
+    if (!playerWhoVoted || !playerWhoVoted.isAlive) {
+      return safeCb(cb, { error: "Apenas vivos podem votar." });
+    }
 
     room.game.votes ??= {};
-    room.game.votes[socket.id] = votedId;
-
-    const playerWhoVoted = room.game.allPlayers.find(p => p.id === socket.id);
-    if (playerWhoVoted) playerWhoVoted.voted = true;
+    room.game.votes[socket.id] = votedId || "NULO";
+    playerWhoVoted.voted = true;
 
     const alivePlayers = room.game.allPlayers.filter(p => p.isAlive);
     const allVoted = alivePlayers.every(p => Object.prototype.hasOwnProperty.call(room.game.votes, p.id));
 
     if (allVoted) {
-      room.game.votingFinished = true;
-      const voteCount = {};
-      Object.values(room.game.votes).forEach(id => {
-        if (id && id !== "NULO") {
-          voteCount[id] = (voteCount[id] || 0) + 1;
-        }
-      });
-
-      let maxVotes = 0;
-      let candidates = [];
-      Object.entries(voteCount).forEach(([id, count]) => {
-        if (count > maxVotes) {
-          maxVotes = count;
-          candidates = [id];
-        } else if (count === maxVotes) {
-          candidates.push(id);
-        }
-      });
-
-      // Se houver empate ou ninguém recebeu votos (votos nulos/abstenção)
-      if (candidates.length !== 1 || maxVotes === 0) {
-
-        // votação acabou, mas sem eliminação
-        // o front mostra o card neutro
-        room.game.eliminatedId = null; // 👈 EMPATE OU NULO: Ninguém foi eliminado
-      } else {
-        // ELIMINAÇÃO
-        const eliminatedId = candidates[0];
-        room.game.eliminatedId = eliminatedId; // 👈 SALVA O ID DE QUEM MORREU
-        const playerToKill = room.game.allPlayers.find(p => p.id === eliminatedId);
-        if (playerToKill) playerToKill.isAlive = false;
-
-        // VERIFICA CONDIÇÃO DE VITÓRIA APÓS ELIMINAÇÃO
-        const survivors = room.game.allPlayers.filter(p => p.isAlive);
-        const impostorsAlive = survivors.filter(p => p.isImpostor).length;
-        const crewAlive = survivors.length - impostorsAlive;
-
-        // Regra: Fim de jogo se impostores morrerem OU se igualarem os civis
-        const isGameOver = impostorsAlive === 0 || impostorsAlive >= crewAlive;
-
-        // Se o jogo acabou, vai para o "result" (Pódio). 
-        // Se NÃO acabou, envia para o "result" também porque o componente do Front 
-        // usa 'finished' (baseado na fase result) para exibir o Card de Identidade do morto.
-        
-        // Dica: Se quiser que o pódio final seja uma tela diferente do Card de Identidade,
-        // você precisaria criar uma fase "podium" e mudar o front. 
-        // Do jeito que está seu front, 'result' abre o Card do Morto.
+      // 🔥 Todo mundo foi rápido! Desarma a bomba-relógio!
+      if (room.game.votingTimeout) {
+        clearTimeout(room.game.votingTimeout);
+        room.game.votingTimeout = null;
       }
+      processVotingResults(room, io);
+    } else {
+      emitGameUpdateToAll(io, room);
     }
 
-    emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });
   });
 
   socket.on("confirm-elimination", ({ roomCode }, cb) => {
     const room = rooms[roomCode];
     if (!room?.game) return;
-
-    if (room.hostId !== socket.id) {
-      return cb?.({ error: "Somente o host pode prosseguir" });
-    }
+    if (room.hostId !== socket.id) return cb?.({ error: "Somente o host pode prosseguir" });
 
     const game = room.game;
 
-    // 🔄 RESET DE VOTOS (sempre)
     game.votes = {};
     game.votingFinished = false;
+    game.votingEndTime = null; // Limpa o tempo
     game.eliminatedId = null;
     game.allPlayers.forEach(p => p.voted = false);
 
-    // 🔍 VERIFICA CONDIÇÃO DE FIM DE JOGO
     const alivePlayers = game.allPlayers.filter(p => p.isAlive);
     const impostorsAlive = alivePlayers.filter(p => p.isImpostor).length;
     const crewAlive = alivePlayers.length - impostorsAlive;
-
     const isGameOver = impostorsAlive === 0 || impostorsAlive >= crewAlive;
 
-    // 🏁 SE O JOGO ACABOU → CALCULA PONTUAÇÃO FINAL
     if (isGameOver) {
-      // Usa sistema de scoring padronizado
       calculateAndApplyScores(game, true);
       game.phase = "result";
     } else {
-      // 🔁 CONTINUA O JOGO
       game.phase = "discussion";
     }
 
-    // 🔄 EMITE UPDATE PARA TODOS
     emitGameUpdateToAll(io, room);
     cb?.({ ok: true });
   });
-
 
   socket.on("toggle-ready", ({ roomCode }, cb) => {
     const room = rooms[roomCode];

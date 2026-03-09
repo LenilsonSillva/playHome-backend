@@ -80,6 +80,12 @@ export function buildPlayerView(game, socketId) {
   const player = game.allPlayers.find(p => p.id === socketId);
   if (!player) return null;
 
+    // 🔥 1. Calcula o tempo restante aqui no servidor
+  let votingTimeLeft = null;
+  if (game.phase === "voting" && game.votingEndTime) {
+    votingTimeLeft = Math.max(0, game.votingEndTime - Date.now());
+  }
+
   const baseView = {
     phase: game.phase,
     roomCode: game.roomCode,
@@ -95,7 +101,7 @@ export function buildPlayerView(game, socketId) {
     voted: player.voted || false,
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
-    votingFinished: game.votingFinished || false,
+    votingTimeLeft,
     votingEndTime: game.votingEndTime || null, // 🔥 O Servidor manda o tempo pro App!
     votes: game.votes || {},
     eliminatedId: game.eliminatedId || null,
@@ -128,6 +134,13 @@ export function buildPlayerView(game, socketId) {
 }
 
 export function buildSpectatorView(game, socketId, spectatorData = {}) {
+
+    // 🔥 1. Calcula para o espectador também
+  let votingTimeLeft = null;
+  if (game.phase === "voting" && game.votingEndTime) {
+    votingTimeLeft = Math.max(0, game.votingEndTime - Date.now());
+  }
+
   const baseView = {
     phase: game.phase,
     roomCode: game.roomCode,
@@ -138,7 +151,7 @@ export function buildSpectatorView(game, socketId, spectatorData = {}) {
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
-    votingEndTime: game.votingEndTime || null, // 🔥 Adicionado aqui também
+    votingTimeLeft, // 🔥 Adicionado aqui também
     eliminatedId: game.eliminatedId || null,
   };
 

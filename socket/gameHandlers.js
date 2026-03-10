@@ -83,6 +83,7 @@ export function buildPlayerView(game, socketId) {
   const baseView = {
     phase: game.phase,
     roomCode: game.roomCode,
+    serverTime: Date.now(),
     myName: player.name,
     myEmoji: player.emoji,
     myColor: player.color,
@@ -131,6 +132,7 @@ export function buildSpectatorView(game, socketId, spectatorData = {}) {
   const baseView = {
     phase: game.phase,
     roomCode: game.roomCode,
+    serverTime: Date.now(),
     isSpectator: true,
     myName: spectatorData.name || "Espectador",
     myEmoji: spectatorData.emoji || "👁️",
@@ -138,7 +140,7 @@ export function buildSpectatorView(game, socketId, spectatorData = {}) {
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
     votingFinished: game.votingFinished || false,
-    votingEndTime: game.votingEndTime || null, // 🔥 Adicionado aqui também
+    votingEndTime: game.votingEndTime || null,
     eliminatedId: game.eliminatedId || null,
   };
 

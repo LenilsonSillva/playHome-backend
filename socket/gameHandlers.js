@@ -47,10 +47,10 @@ function processVotingResults(room, io) {
   const voteCount = {};
   
   Object.values(room.game.votes).forEach(id => {
-    if (id && id !== "NULO") {
-      voteCount[id] = (voteCount[id] || 0) + 1;
-    }
-  });
+  if (id !== null) {
+    voteCount[id] = (voteCount[id] || 0) + 1;
+  }
+});
 
   let maxVotes = 0;
   let candidates = [];
@@ -238,8 +238,8 @@ export function registerGameHandlers(io, socket) {
         const alivePlayers = room.game.allPlayers.filter(p => p.isAlive);
         // O tempo acabou! Força NULO em quem não votou
         alivePlayers.forEach(p => {
-          if (!room.game.votes[p.id]) {
-            room.game.votes[p.id] = "NULO";
+          if (!(p.id in room.game.votes)) {
+            room.game.votes[p.id] = null;
             p.voted = true;
           }
         });
@@ -318,8 +318,12 @@ export function registerGameHandlers(io, socket) {
       return safeCb(cb, { error: "Apenas vivos podem votar." });
     }
 
+    if (socket.id === votedId) {
+      return safeCb(cb, { error: "Você não pode votar em si mesmo." });
+    }
+
     room.game.votes ??= {};
-    room.game.votes[socket.id] = votedId || "NULO";
+    room.game.votes[socket.id] = votedId ?? null;
     playerWhoVoted.voted = true;
 
     const alivePlayers = room.game.allPlayers.filter(p => p.isAlive);

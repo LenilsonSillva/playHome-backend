@@ -96,6 +96,8 @@ export function buildPlayerView(game, socketId) {
     voted: player.voted || false,
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
+    impostorCount: game.howManyImpostors, 
+    impostorsUnited: game.impostorsUnited || false, 
     votingFinished: game.votingFinished || false,
     votingEndTime: game.votingEndTime || null, // 🔥 O Servidor manda o tempo pro App!
     votes: game.votes || {},
@@ -139,6 +141,8 @@ export function buildSpectatorView(game, socketId, spectatorData = {}) {
     myColor: spectatorData.color || "#666666",
     whoStart: game.whoStart,
     twoWordsMode: game.twoWordsMode,
+    impostorCount: game.howManyImpostors,
+    impostorsUnited: game.impostorsUnited || false,
     votingFinished: game.votingFinished || false,
     votingEndTime: game.votingEndTime || null,
     eliminatedId: game.eliminatedId || null,
@@ -178,7 +182,7 @@ export function registerGameHandlers(io, socket) {
     const gameData = initializeGame(
       playersForGame, config.howManyImpostors, config.twoWordsMode,
       config.impostorHasHint, config.selectedCategories, config.whoStart,
-      config.impostorCanStart, config.impostorTrap, config.impostorCat,
+      config.impostorCanStart, config.impostorTrap, config.impostorCat, config.impostorsUnited,
       room.game?.impostorHistory ??[], room.game?.usedWords ??[]
     );
 
@@ -198,7 +202,7 @@ export function registerGameHandlers(io, socket) {
 
     room.game = {
       ...gameData, phase: "reveal", roomCode, hostId: room.hostId,
-      votes: {}, impostorHistory: newHistory,
+      votes: {}, impostorHistory: newHistory, impostorsUnited: config.impostorsUnited,
       usedWords: [...(room.game?.usedWords ?? []), ...gameData.chosenWord],
     };
 
@@ -267,7 +271,7 @@ export function registerGameHandlers(io, socket) {
     const gameData = initializeGame(
       playersForGame, config.howManyImpostors, config.twoWordsMode, 
       config.impostorHasHint, config.selectedCategories, config.whoStart, 
-      config.impostorCanStart, config.impostorTrap, config.impostorCat, 
+      config.impostorCanStart, config.impostorTrap, config.impostorCat, config.impostorsUnited,
       room.game.impostorHistory, room.game.usedWords
     );
 
@@ -283,7 +287,7 @@ export function registerGameHandlers(io, socket) {
         revealed: false, ready: false, voted: false, globalScore: old?.globalScore ?? 0,
       };
     });
-    room.game = { ...gameData, phase: "reveal", roomCode, hostId: room.hostId, votes: {}, impostorHistory: room.game.impostorHistory, usedWords: [...room.game.usedWords, ...gameData.chosenWord] };
+    room.game = { ...gameData, phase: "reveal", roomCode, hostId: room.hostId, votes: {}, impostorsUnited: config.impostorsUnited, impostorHistory: room.game.impostorHistory, usedWords: [...room.game.usedWords, ...gameData.chosenWord] };
 
     emitGameUpdateToAll(io, room);
     safeCb(cb, { ok: true });

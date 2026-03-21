@@ -207,6 +207,7 @@ export function initializeGame(
   impostorCanStart,
   impostorTrap,
   impostorCat,
+  impostorsUnited,
   impostorHistory = [],
   usedWords = [],
 ) {
@@ -240,6 +241,7 @@ export function initializeGame(
     impostorHasHint,
     impostorTrap,
     impostorCat,
+    impostorsUnited,
     selectedCategories,
     whoStart: setWhoStart,
     impostorCanStart,

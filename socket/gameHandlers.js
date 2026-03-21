@@ -124,9 +124,29 @@ export function buildPlayerView(game, socketId) {
 
   return {
     ...baseView,
-    allPlayers: game.allPlayers.map(p => ({
-      socketId: p.id, name: p.name, ready: p.ready,
-    }))
+    players: game.allPlayers.map(p => {
+      // Se a regra está ativa E quem está pedindo é Impostor, 
+      // enviamos o isImpostor, emoji e color dos outros.
+      if (game.impostorsUnited && player.isImpostor) {
+        return {
+          id: p.id, // Mudei para id para bater com o offline
+          socketId: p.id,
+          name: p.name,
+          ready: p.ready,
+          isImpostor: p.isImpostor, // 👈 Agora o aliado recebe isso!
+          emoji: p.emoji,           // 👈 Necessário para o visual da carta
+          color: p.color            // 👈 Necessário para o visual da carta
+        };
+      }
+
+      // Se for um cidadão comum, ele continua recebendo apenas o básico
+      return {
+        id: p.id,
+        socketId: p.id, 
+        name: p.name, 
+        ready: p.ready,
+      };
+    })
   };
 }
 

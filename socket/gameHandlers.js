@@ -124,7 +124,7 @@ export function buildPlayerView(game, socketId) {
 
   return {
     ...baseView,
-    players: game.allPlayers.map(p => {
+    allPlayers: game.allPlayers.map(p => {
       // Se a regra está ativa E quem está pedindo é Impostor, 
       // enviamos o isImpostor, emoji e color dos outros.
       if (game.impostorsUnited && player.isImpostor) {

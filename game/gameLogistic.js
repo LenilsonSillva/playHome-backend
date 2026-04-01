@@ -49,48 +49,58 @@ const ICON_COLORS = [
 ];
 
 function pickImpostors(players, howManyImpostors, impostorHistory = []) {
+  // Máximo de vezes SEGUIDAS que um jogador pode ser impostor (máximo 2 seguidas)
   const MAX_CONSECUTIVE = 2;
 
-  // inicializa contadores
+  // inicializa contadores de sequências consecutivas
   const consecutiveCount = {};
+  const sequenceBroken = {}; // rastreia se a sequência já foi quebrada
+  
   players.forEach(p => {
     consecutiveCount[p.id] = 0;
+    sequenceBroken[p.id] = false;
   });
 
-  // percorre histórico de trás para frente
+  // percorre histórico de trás para frente (do mais recente para o mais antigo)
+  // contando quantas vezes SEGUIDAS cada jogador foi impostor começando do fim
   for (let i = impostorHistory.length - 1; i >= 0; i--) {
     const round = impostorHistory[i];
 
-    let someoneBroke = false;
-
+    // Para cada jogador, verifica se foi impostor nesta rodada
     players.forEach(p => {
+      // Se a sequência já foi quebrada, não verifica mais rodadas anteriores
+      if (sequenceBroken[p.id]) {
+        return; // continue para o próximo jogador
+      }
+
       if (round.includes(p.id)) {
+        // Foi impostor: incrementa a sequência
         consecutiveCount[p.id]++;
-        if (consecutiveCount[p.id] >= MAX_CONSECUTIVE) {
-          someoneBroke = true;
-        }
       } else {
-        consecutiveCount[p.id] = 0;
+        // NÃO foi impostor: a sequência foi quebrada
+        // Marca para parar de verificar rodadas anteriores para este jogador
+        sequenceBroken[p.id] = true;
       }
     });
-
-    if (someoneBroke) break;
   }
 
-  // bloqueados
+  // bloqueia jogadores que foram impostores mais de MAX_CONSECUTIVE vezes seguidas
+  // Exemplo: MAX_CONSECUTIVE = 2 significa máximo 2 seguidas
+  // Logo bloqueamos quando count > 2 (ou seja, 3 ou mais)
   const blockedIds = players
-    .filter(p => consecutiveCount[p.id] >= MAX_CONSECUTIVE)
+    .filter(p => consecutiveCount[p.id] > MAX_CONSECUTIVE)
     .map(p => p.id);
 
-  // pool válida
+  // pool válida (sem bloqueados)
   let pool = players.filter(p => !blockedIds.includes(p.id));
 
-  // fallback de segurança
+  // fallback: se não há jogadores suficientes disponíveis, permite todos
+  // (garante que o jogo sempre possa continuar, mesmo em casos extremos)
   if (pool.length < howManyImpostors) {
     pool = [...players];
   }
 
-  // sorteio
+  // sorteio aleatório da pool válida
   return shuffleArray(pool)
     .slice(0, howManyImpostors)
     .map(p => p.id);

@@ -191,19 +191,23 @@ export function buildSpectatorView(game, socketId, spectatorData = {}) {
 export function registerGameHandlers(io, socket) {
 
   // --- START GAME ---
-  socket.on("start-game", ({ roomCode, config }, cb) => {
+  socket.on("start-game", ({ roomCode, config, language }, cb) => {
     const room = rooms[roomCode];
     if (!room) return safeCb(cb, { error: "Sala não existe" });
     if (room.hostId !== socket.id) return safeCb(cb, { error: "Somente host" });
 
     room.config = config;
+    // Armazena o idioma selecionado (pode vir como parâmetro ou dentro de config)
+    const selectedLanguage = language || config.language || "pt-BR";
+    room.language = selectedLanguage;
+    
     const playersForGame = room.players.map((p) => ({ ...p, id: p.socketId }));
 
     const gameData = initializeGame(
       playersForGame, config.howManyImpostors, config.twoWordsMode,
       config.impostorHasHint, config.selectedCategories, config.whoStart,
       config.impostorCanStart, config.impostorTrap, config.impostorCat, config.impostorsUnited,
-      room.game?.impostorHistory ??[], room.game?.usedWords ??[]
+      room.game?.impostorHistory ??[], room.game?.usedWords ??[], selectedLanguage
     );
 
     gameData.allPlayers = gameData.allPlayers.map((p) => ({
@@ -288,11 +292,12 @@ export function registerGameHandlers(io, socket) {
     if (!room?.game || room.hostId !== socket.id) return;
     const config = room.config;
     const playersForGame = room.players.map((p) => ({ ...p, id: p.socketId }));
+    // Usa o idioma armazenado durante start-game
     const gameData = initializeGame(
       playersForGame, config.howManyImpostors, config.twoWordsMode, 
       config.impostorHasHint, config.selectedCategories, config.whoStart, 
       config.impostorCanStart, config.impostorTrap, config.impostorCat, config.impostorsUnited,
-      room.game.impostorHistory, room.game.usedWords
+      room.game.impostorHistory, room.game.usedWords, room.language || "pt-BR"
     );
 
     if (room.waitingPlayers?.length) {

@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd \"c:\\\\Users\\\\lenil\\\\OneDrive\\\\Documentos\\\\Programas\\\\playHome Backend\" ; node -c game/words/index\\.js ; echo \"✓ index\\.js OK\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

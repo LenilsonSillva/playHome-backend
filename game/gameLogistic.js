@@ -1,4 +1,4 @@
-import { WORDS } from "./words.js";
+import { getWordDatabase } from "./words/index.js";
 import { pickRandom, shuffleArray } from "./impostor.utils.js";
 
 export function getImpostorCount(playersCount) {
@@ -210,7 +210,11 @@ export function initializeGame(
   impostorsUnited,
   impostorHistory = [],
   usedWords = [],
+  language = "pt-BR"
 ) {
+  // Obtém o banco de palavras correto baseado no idioma
+  const wordDatabase = getWordDatabase(language);
+
   const impostorTrueOrFalse = createImpostorPlayers(
     allPlayers,
     howManyImpostors,
@@ -221,7 +225,7 @@ export function initializeGame(
     impostorTrueOrFalse,
     twoWordsMode,
     selectedCategories,
-    WORDS,
+    wordDatabase,
     impostorHasHint,
     impostorTrap,
     impostorCat, 
